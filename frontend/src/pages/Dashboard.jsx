@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Box, Grid, Card, Typography, Stack, List, ListItem, ListItemIcon, ListItemText, Skeleton, Chip } from '@mui/material'
+import { useCallback } from 'react'
+import { Alert, Box, Grid, Card, Typography, Stack, List, ListItem, ListItemIcon, ListItemText, Skeleton, Chip } from '@mui/material'
 import PaymentsRoundedIcon from '@mui/icons-material/PaymentsRounded'
 import PieChartRoundedIcon from '@mui/icons-material/PieChartRounded'
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded'
@@ -12,9 +12,12 @@ import SellRoundedIcon from '@mui/icons-material/SellRounded'
 import StatTile from '../components/StatTile'
 import SplitBar from '../components/SplitBar'
 import SalesTrendChart from '../components/SalesTrendChart'
-import { fetchDashboard } from '../data/mockApi'
-import { formatCurrency, formatNumber } from '../utils/format'
+import { fetchDashboard } from '../api/endpoints'
+import { useResource } from '../api/useResource'
+import { formatCurrency, formatQuantity, timeAgo } from '../utils/format'
 import { tabularNums } from '../theme/theme'
+import { useAuth } from '../auth/authStore'
+import { useFirm } from '../firm/firmStore'
 
 const ACTIVITY_ICON = {
   order: ReceiptLongRoundedIcon,
@@ -24,83 +27,114 @@ const ACTIVITY_ICON = {
   pricing: SellRoundedIcon,
 }
 
+/** "Good morning" / "Good afternoon" / "Good evening" by local clock. */
+function greeting() {
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export default function Dashboard() {
-  const [data, setData] = useState(null)
+  const { user } = useAuth()
+  const { activeFirm, activeFirmId } = useFirm()
 
-  useEffect(() => {
-    let active = true
-    fetchDashboard().then((res) => active && setData(res))
-    return () => {
-      active = false
-    }
-  }, [])
+  // "Saheb Ali" -> "Saheb"; the greeting reads better with a first name.
+  const firstName = user?.name?.trim().split(/\s+/)[0]
 
-  const loading = !data
+  // Keyed on the firm: every figure below is one firm's books, so switching
+  // firms refetches rather than leaving the previous firm's totals on screen.
+  const { data, error, loading } = useResource(
+    activeFirmId,
+    useCallback(() => fetchDashboard(), []),
+    'Could not load the dashboard'
+  )
 
   return (
     <Box>
       <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between",  mb: 2.5 }}>
         <Box>
           <Typography variant="h5" fontWeight={800}>
-            Good afternoon, Akbar 👋
+            {greeting()}{firstName ? `, ${firstName}` : ''} 👋
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Here's how Shree Krishna Kirana Store is doing today.
+            {activeFirm
+              ? `Here's how ${activeFirm.firmName} is doing today.`
+              : "Here's how your firm is doing today."}
           </Typography>
         </Box>
       </Stack>
 
+      {error && (
+        <Alert severity="error" sx={{ mb: 2.5 }}>
+          {error}
+        </Alert>
+      )}
+
       <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }} sx={{ height: '100%' }}>
-          {loading ? (
+          {loading || !data ? (
             <Skeleton variant="rounded" height={168} />
           ) : (
             <StatTile
               label="Today's sales"
               value={formatCurrency(data.stats.todaysSales)}
               icon={<PaymentsRoundedIcon fontSize="small" />}
-              delta={{ value: 4.8, upIsGood: true }}
+              // Real change against yesterday's takings, computed server-side.
+              delta={{ value: data.stats.salesDeltaPct, upIsGood: true }}
               trend={data.trend.map((d) => ({ value: d.retail + d.wholesale }))}
             />
           )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }} sx={{ height: '100%' }}>
-          {loading ? (
+          {loading || !data ? (
             <Skeleton variant="rounded" height={168} />
           ) : (
             <StatTile
               label="Retail vs Wholesale"
-              value={`${Math.round((data.stats.retailShare / (data.stats.retailShare + data.stats.wholesaleShare)) * 100)}% Retail`}
+              // A day with no sales yet would divide by zero and print "NaN%".
+              value={
+                data.stats.todaysSales > 0
+                  ? `${Math.round((data.stats.retailShare / data.stats.todaysSales) * 100)}% Retail`
+                  : 'No sales yet'
+              }
               icon={<PieChartRoundedIcon fontSize="small" />}
               footer={<SplitBar retail={data.stats.retailShare} wholesale={data.stats.wholesaleShare} />}
             />
           )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }} sx={{ height: '100%' }}>
-          {loading ? (
+          {loading || !data ? (
             <Skeleton variant="rounded" height={168} />
           ) : (
             <StatTile
               label="Pending Khata"
               value={formatCurrency(data.stats.pendingKhata)}
               icon={<AccountBalanceWalletRoundedIcon fontSize="small" />}
-              delta={{ value: 2.1, upIsGood: false }}
               accent="#C1502E"
-              trend={data.trend.map((d, i) => ({ value: data.stats.pendingKhata * (0.85 + i * 0.012) }))}
+              footer={
+                <Typography variant="caption" color="text.secondary">
+                  {data.stats.khataAccounts} account{data.stats.khataAccounts === 1 ? '' : 's'}
+                  {data.stats.overLimitCount > 0 ? ` · ${data.stats.overLimitCount} over limit` : ''}
+                </Typography>
+              }
             />
           )}
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }} sx={{ height: '100%' }}>
-          {loading ? (
+          {loading || !data ? (
             <Skeleton variant="rounded" height={168} />
           ) : (
             <StatTile
               label="Low stock count"
               value={`${data.stats.lowStockCount} items`}
               icon={<Inventory2RoundedIcon fontSize="small" />}
-              delta={{ value: 1, upIsGood: false }}
               accent="#C1502E"
-              trend={data.trend.map((_, i) => ({ value: 3 + Math.abs(Math.sin(i)) * 4 }))}
+              footer={
+                <Typography variant="caption" color="text.secondary">
+                  at or below reorder level
+                </Typography>
+              }
             />
           )}
         </Grid>
@@ -112,7 +146,7 @@ export default function Dashboard() {
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
               Sales trend — last 14 days
             </Typography>
-            {loading ? (
+            {loading || !data ? (
               <Skeleton variant="rounded" height={280} />
             ) : (
               <SalesTrendChart data={data.trend} />
@@ -124,12 +158,17 @@ export default function Dashboard() {
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
               Recent activity
             </Typography>
-            {loading ? (
+            {loading || !data ? (
               <Stack spacing={1.5} sx={{ mt: 1 }}>
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Skeleton key={i} variant="text" height={32} />
                 ))}
               </Stack>
+            ) : data.activity.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                Nothing has happened at this firm yet. Bills, khata repayments and stock
+                receipts will appear here.
+              </Typography>
             ) : (
               <List dense disablePadding>
                 {data.activity.map((a) => {
@@ -154,7 +193,7 @@ export default function Dashboard() {
                       </ListItemIcon>
                       <ListItemText
                         primary={a.text}
-                        secondary={a.time}
+                        secondary={timeAgo(a.at)}
                         slotProps={{
                           primary: { fontSize: '0.83rem', fontWeight: 500 },
                           secondary: { fontSize: '0.72rem' },
@@ -173,10 +212,14 @@ export default function Dashboard() {
         <Grid size={{ xs: 12 }}>
           <Card sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-              Top wholesale products (by revenue)
+              Top products (by revenue, last 30 days)
             </Typography>
-            {loading ? (
+            {loading || !data ? (
               <Skeleton variant="rounded" height={160} />
+            ) : data.topProducts.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                No sales in the last 30 days.
+              </Typography>
             ) : (
               <Stack spacing={1.25} sx={{ mt: 1 }}>
                 {data.topProducts.map((p, idx) => (
@@ -185,8 +228,10 @@ export default function Dashboard() {
                     <Typography variant="body2" fontWeight={600} sx={{ flex: 1 }} noWrap>
                       {p.productName}
                     </Typography>
+                    {/* Packet goods weigh nothing on the bill, so the sold
+                        quantity is the figure that always means something. */}
                     <Typography variant="body2" color="text.secondary" sx={tabularNums}>
-                      {formatNumber(p.qtyKg)} kg
+                      {p.weightKg > 0 ? `${formatQuantity(p.weightKg)} kg` : formatQuantity(p.quantity)}
                     </Typography>
                     <Typography variant="body2" fontWeight={700} sx={{ ...tabularNums, width: 100, textAlign: 'right' }}>
                       {formatCurrency(p.revenue)}

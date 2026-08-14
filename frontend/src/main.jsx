@@ -13,14 +13,22 @@ import './index.css'
 import App from './App.jsx'
 import { ThemeModeProvider } from './theme/ThemeModeContext'
 import { ToastProvider } from './components/ToastProvider'
+import { AuthProvider } from './auth/AuthProvider'
+import { FirmProvider } from './firm/FirmProvider'
 
+// FirmProvider sits inside AuthProvider because it only fetches once a session
+// exists, and inside BrowserRouter is unnecessary — neither provider routes.
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeModeProvider>
       <ToastProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <AuthProvider>
+          <FirmProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </FirmProvider>
+        </AuthProvider>
       </ToastProvider>
     </ThemeModeProvider>
   </StrictMode>,

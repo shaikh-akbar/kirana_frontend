@@ -1,5 +1,5 @@
 import { Avatar } from '@mui/material'
-import { initialsOf } from '../data/buyers'
+import { initialsOf } from '../utils/format'
 
 const RING_COLOR = {
   CLEAR: 'success.main',

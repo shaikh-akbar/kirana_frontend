@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Box,
   Grid,
@@ -16,12 +16,18 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Skeleton,
+  Alert,
+  CircularProgress,
 } from '@mui/material'
 import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded'
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded'
 import SettingsBrightnessRoundedIcon from '@mui/icons-material/SettingsBrightnessRounded'
 import { useThemeMode } from '../../theme/themeModeStore'
 import { useToast } from '../../components/toastContext'
+import { fetchActiveFirm, updateActiveFirm } from '../../api/endpoints'
+import { apiErrorMessage } from '../../api/client'
+import { useFirm } from '../../firm/firmStore'
 
 const USERS = [
   { name: 'Akbar Khan', email: 'it@mobilogi.com', role: 'Admin' },
@@ -32,11 +38,68 @@ const USERS = [
 
 const ROLE_COLOR = { Admin: 'primary', 'Sales Rep': 'info', Cashier: 'default' }
 
+// Firm fields this screen edits, mapped to their labels. Kept as data so the
+// form, the payload and the load-time seeding cannot drift apart.
+const PROFILE_FIELDS = [
+  { name: 'firmName', label: 'Firm name', width: 6 },
+  { name: 'gstin', label: 'GSTIN', width: 6 },
+  { name: 'phone', label: 'Phone', width: 6 },
+  { name: 'vatTin', label: 'VAT TIN', width: 6 },
+  { name: 'address', label: 'Address', width: 12 },
+  { name: 'city', label: 'City', width: 4 },
+  { name: 'state', label: 'State', width: 4 },
+  { name: 'pincode', label: 'Pincode', width: 4 },
+]
+
 export default function Settings() {
   const { mode, setMode } = useThemeMode()
   const { showToast } = useToast()
+  const { refreshFirms } = useFirm()
   const [gstRate, setGstRate] = useState(5)
   const [defaultUnit, setDefaultUnit] = useState('KG')
+  const [firm, setFirm] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [loadError, setLoadError] = useState(null)
+  const [saveError, setSaveError] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    fetchActiveFirm()
+      .then((data) => {
+        if (!active) return
+        setFirm(data)
+        // null -> '' so the inputs stay controlled.
+        setProfile(
+          Object.fromEntries(PROFILE_FIELDS.map((f) => [f.name, data[f.name] ?? '']))
+        )
+      })
+      .catch((err) => active && setLoadError(apiErrorMessage(err, 'Could not load the firm')))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  async function handleSaveProfile() {
+    setSaveError(null)
+    setSaving(true)
+    try {
+      // Cleared fields are sent as null so a value can actually be removed;
+      // omitting them would leave the old value in place.
+      const payload = Object.fromEntries(
+        Object.entries(profile).map(([key, value]) => [key, value === '' ? null : value])
+      )
+      const updated = await updateActiveFirm(payload)
+      setFirm(updated)
+      // The firm name shows in the topbar switcher, so that list must reload.
+      await refreshFirms()
+      showToast('Firm profile saved')
+    } catch (err) {
+      setSaveError(apiErrorMessage(err, 'Could not save the firm profile'))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Box>
@@ -48,26 +111,45 @@ export default function Settings() {
           <Stack spacing={2.5}>
             <Card sx={{ p: 2.5 }}>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>Store profile</Typography>
-              <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField label="Firm name" defaultValue="Shree Krishna Kirana Store" fullWidth size="small" />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField label="GSTIN" defaultValue="27ABCDE1234F1Z5" fullWidth size="small" />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField label="Phone" defaultValue="+91 98230 11234" fullWidth size="small" />
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField label="Email" defaultValue="it@mobilogi.com" fullWidth size="small" />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <TextField label="Address" defaultValue="APMC Yard, Sector 4, Nashik, Maharashtra 422003" fullWidth size="small" />
-                </Grid>
-              </Grid>
-              <Button variant="contained" sx={{ mt: 2.5 }} onClick={() => showToast('Store profile saved', 'success')}>
-                Save changes
-              </Button>
+
+              {loadError && <Alert severity="error" sx={{ mt: 1 }}>{loadError}</Alert>}
+
+              {!profile && !loadError && <Skeleton variant="rounded" height={220} sx={{ mt: 1 }} />}
+
+              {profile && (
+                <>
+                  {saveError && <Alert severity="error" sx={{ mt: 1 }}>{saveError}</Alert>}
+                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                    {PROFILE_FIELDS.map((field) => (
+                      <Grid key={field.name} size={{ xs: 12, sm: field.width }}>
+                        <TextField
+                          label={field.label}
+                          value={profile[field.name]}
+                          onChange={(e) => setProfile((p) => ({ ...p, [field.name]: e.target.value }))}
+                          fullWidth
+                          size="small"
+                        />
+                      </Grid>
+                    ))}
+                  </Grid>
+                  <Stack direction="row" spacing={2} sx={{ mt: 2.5, alignItems: 'center' }}>
+                    <Button
+                      variant="contained"
+                      onClick={handleSaveProfile}
+                      disabled={saving}
+                      startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
+                    >
+                      {saving ? 'Saving…' : 'Save changes'}
+                    </Button>
+                    {firm && (
+                      <Typography variant="caption" color="text.secondary">
+                        Next bill: <strong>{firm.invoicePrefix}{String(firm.nextBillNumber).padStart(firm.invoicePadding, '0')}</strong>
+                        {' · '}bill series is set when the firm is created and advances automatically
+                      </Typography>
+                    )}
+                  </Stack>
+                </>
+              )}
             </Card>
 
             <Card sx={{ p: 2.5 }}>

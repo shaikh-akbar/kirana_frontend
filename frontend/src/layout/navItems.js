@@ -2,6 +2,7 @@ import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded'
 import PointOfSaleRoundedIcon from '@mui/icons-material/PointOfSaleRounded'
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded'
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded'
+import CategoryRoundedIcon from '@mui/icons-material/CategoryRounded'
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded'
 import SellRoundedIcon from '@mui/icons-material/SellRounded'
 import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded'
@@ -13,6 +14,7 @@ export const navItems = [
   { label: 'POS Billing', path: '/pos', icon: PointOfSaleRoundedIcon },
   { label: 'Wholesale Orders', path: '/wholesale', icon: LocalShippingRoundedIcon },
   { label: 'Khata Ledger', path: '/khata', icon: AccountBalanceWalletRoundedIcon },
+  { label: 'Catalog', path: '/catalog', icon: CategoryRoundedIcon },
   { label: 'Inventory', path: '/inventory', icon: Inventory2RoundedIcon },
   { label: 'Daily Pricing', path: '/pricing', icon: SellRoundedIcon },
   { label: 'Purchases', path: '/purchases', icon: ShoppingCartRoundedIcon },

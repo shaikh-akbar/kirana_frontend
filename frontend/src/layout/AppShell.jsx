@@ -4,9 +4,11 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import MobileTabBar from './MobileTabBar'
+import { useFirm } from '../firm/firmStore'
 
 export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
+  const { activeFirmId } = useFirm()
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
@@ -23,7 +25,12 @@ export default function AppShell() {
             pb: { xs: 10, md: 3 },
           }}
         >
-          <Outlet />
+          {/* Keying on the active firm remounts the page when firms are
+              switched, so every screen re-fetches for the new firm. Without it
+              each page would have to add activeFirmId to its own effect
+              dependencies and one omission would silently show another firm's
+              numbers. */}
+          <Outlet key={activeFirmId} />
         </Box>
         <MobileTabBar />
       </Box>

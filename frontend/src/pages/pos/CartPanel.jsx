@@ -10,12 +10,16 @@ import { tabularNums } from '../../theme/theme'
 import EmptyState from '../../components/EmptyState'
 import ShoppingCartOutlinedIcon from '@mui/icons-material/ShoppingCartOutlined'
 
-const GST_RATE = 0.05
-
-export default function CartPanel({ items, onInc, onDec, onRemove, onCheckout }) {
-  const subtotal = items.reduce((sum, i) => sum + i.product.retailPrice * i.qty, 0)
-  const tax = Math.round(subtotal * GST_RATE)
-  const total = subtotal + tax
+/**
+ * No tax line: this cart used to add a flat 5% GST of its own, which the
+ * server never charged — so the receipt showed one total and the printed bill
+ * another. The firm's bills are raised under the Maharashtra VAT declaration
+ * with tax included in the rate, so the counter total is simply the sum of the
+ * lines. When per-item GST is introduced it belongs on the product, priced
+ * server-side, not invented here.
+ */
+export default function CartPanel({ items, onInc, onDec, onRemove, onCheckout, busy = false }) {
+  const total = items.reduce((sum, i) => sum + i.product.retailPrice * i.qty, 0)
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -69,12 +73,12 @@ export default function CartPanel({ items, onInc, onDec, onRemove, onCheckout })
 
       <Stack spacing={0.75} sx={{ mb: 1.5 }}>
         <Stack direction="row" sx={{ justifyContent: "space-between" }}>
-          <Typography variant="body2" color="text.secondary">Subtotal</Typography>
-          <Typography variant="body2" sx={tabularNums}>{formatCurrency(subtotal)}</Typography>
-        </Stack>
-        <Stack direction="row" sx={{ justifyContent: "space-between" }}>
-          <Typography variant="body2" color="text.secondary">GST (5%)</Typography>
-          <Typography variant="body2" sx={tabularNums}>{formatCurrency(tax)}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {items.length} item{items.length === 1 ? '' : 's'}
+          </Typography>
+          <Typography variant="body2" sx={tabularNums}>
+            {items.reduce((sum, i) => sum + i.qty, 0)} qty
+          </Typography>
         </Stack>
         <Stack direction="row" sx={{ justifyContent: "space-between",  pt: 0.5 }}>
           <Typography variant="h6" fontWeight={800}>Total</Typography>
@@ -90,7 +94,7 @@ export default function CartPanel({ items, onInc, onDec, onRemove, onCheckout })
           variant="contained"
           color="success"
           size="large"
-          disabled={items.length === 0}
+          disabled={items.length === 0 || busy}
           startIcon={<PaymentsRoundedIcon />}
           onClick={() => onCheckout('Cash', total)}
           sx={{ py: 1.4 }}
@@ -101,7 +105,7 @@ export default function CartPanel({ items, onInc, onDec, onRemove, onCheckout })
           fullWidth
           variant="contained"
           size="large"
-          disabled={items.length === 0}
+          disabled={items.length === 0 || busy}
           startIcon={<QrCodeRoundedIcon />}
           onClick={() => onCheckout('UPI', total)}
           sx={{ py: 1.4 }}
@@ -113,7 +117,7 @@ export default function CartPanel({ items, onInc, onDec, onRemove, onCheckout })
           variant="contained"
           color="info"
           size="large"
-          disabled={items.length === 0}
+          disabled={items.length === 0 || busy}
           startIcon={<CreditCardRoundedIcon />}
           onClick={() => onCheckout('Card', total)}
           sx={{ py: 1.4 }}
