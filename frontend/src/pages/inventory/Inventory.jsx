@@ -120,7 +120,7 @@ export default function Inventory() {
     })
   }, [rows, category, flagFilter])
 
-  const canAdjustStock = user?.roleName === 'ADMIN' || user?.roleName === 'SALES_REP'
+  const canAdjustStock = user?.roleName === 'ADMIN' || user?.roleName === 'WHOLESALER'
   const productOptions = useMemo(
     () => (products || []).filter((product) => product.isActive !== false),
     [products]

@@ -2,12 +2,17 @@ import { Box, Stack, Typography, Tooltip, IconButton } from '@mui/material'
 import { NavLink } from 'react-router-dom'
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded'
 import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded'
-import { navItems } from './navItems'
+import { navItems, getRoleId } from './navItems'
+import { useAuth } from '../auth/authStore'
 
 const EXPANDED_WIDTH = 248
 const COLLAPSED_WIDTH = 76
 
 export default function Sidebar({ collapsed, onToggle }) {
+  const { user } = useAuth()
+  const roleId = getRoleId(user?.roleName)
+  const visibleItems = navItems.filter((item) => item.roles.includes(roleId))
+
   return (
     <Box
       component="nav"
@@ -76,7 +81,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       </Stack>
 
       <Stack spacing={0.5} sx={{ px: collapsed ? 1 : 1.5, flex: 1, overflowY: 'auto' }}>
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon
           const link = (
             <NavLink

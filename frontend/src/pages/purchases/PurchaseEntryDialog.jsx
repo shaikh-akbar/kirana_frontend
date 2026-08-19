@@ -68,7 +68,7 @@ export default function PurchaseEntryDialog({ open, onClose, onCreated }) {
   const suppliers = data?.suppliers ?? EMPTY
   const products = data?.products ?? EMPTY
   const error = saveError || loadError
-  const canManageSuppliers = user?.roleName === 'ADMIN' || user?.roleName === 'SALES_REP'
+  const canManageSuppliers = user?.roleName === 'ADMIN' || user?.roleName === 'WHOLESALER'
 
   const pricedLines = useMemo(
     () =>
