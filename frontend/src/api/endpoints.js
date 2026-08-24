@@ -84,7 +84,13 @@ export const fetchCategories = async () =>
 
 export const createCategory = async (payload) => unwrap(await api.post('/categories', payload))
 
-export const fetchSuppliers = async (params = {}) => unwrap(await api.get('/suppliers', { params })) || []
+export const fetchSuppliers = async (params = {}) => {
+  const result = unwrap(await api.get('/suppliers', { params }))
+  return Array.isArray(result) ? result : result?.rows || []
+}
+
+export const fetchSuppliersReport = async (params = {}) =>
+  unwrap(await api.get('/suppliers', { params })) || { rows: [], total: 0 }
 
 export const createSupplier = async (payload) => unwrap(await api.post('/suppliers', payload))
 
