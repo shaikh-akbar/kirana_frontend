@@ -80,7 +80,7 @@ export default function Catalog() {
 
   const products = data?.products || []
   const categories = data?.categories?.rows
-  const canManageCatalog = user?.roleName === 'ADMIN'
+  const canManageCatalog = user?.roleName === 'ADMIN' || user?.roleName === 'WHOLESALER'
 
   const categoryOptions = useMemo(
     () => (categories || []).filter((category) => category.status === 'ACTIVE'),

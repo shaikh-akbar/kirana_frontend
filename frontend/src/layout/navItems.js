@@ -8,6 +8,7 @@ import SellRoundedIcon from '@mui/icons-material/SellRounded'
 import ShoppingCartRoundedIcon from '@mui/icons-material/ShoppingCartRounded'
 import BarChartRoundedIcon from '@mui/icons-material/BarChartRounded'
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded'
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded'
 
 // Numeric IDs for nav/route gating — a frontend-only convention, mirrored to
 // match the DB's roles.id values (1 Admin, 2 Retailer, 3 Wholesaler, 4 Buyer).
@@ -59,3 +60,13 @@ export const navItems = [
 
 // Priority items shown in the bottom tab bar below 768px; the rest live behind "More".
 export const mobilePrimaryPaths = ['/', '/pos', '/wholesale', '/khata']
+
+// WHOLESALER's top navbar (see WholesaleNav.jsx) groups the same pages from
+// `navItems` into categories instead of listing them flat like the sidebar.
+// Every path here must already be reachable by WHOLESALER in App.jsx/navItems
+// — this only reorganizes the menu, it grants no new access.
+export const wholesaleNavGroups = [
+  { label: 'Graphs', icon: BarChartRoundedIcon, paths: ['/', '/reports'] },
+  { label: 'Wholesale', icon: LocalShippingRoundedIcon, paths: ['/khata', '/wholesale', '/purchases'] },
+  { label: 'Retailer', icon: StorefrontRoundedIcon, paths: ['/catalog', '/inventory', '/pricing'] },
+]

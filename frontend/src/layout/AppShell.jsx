@@ -5,16 +5,20 @@ import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import MobileTabBar from './MobileTabBar'
 import { useFirm } from '../firm/firmStore'
+import { useAuth } from '../auth/authStore'
+import { ROLES, getRoleId, wholesaleNavGroups } from './navItems'
 
 export default function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const { activeFirmId } = useFirm()
+  const { user } = useAuth()
+  const isWholesaler = getRoleId(user?.roleName) === ROLES.WHOLESALER
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      {!isWholesaler && <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />}
       <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <Topbar onMenuClick={() => setCollapsed((c) => !c)} />
+        <Topbar onMenuClick={() => setCollapsed((c) => !c)} navGroups={isWholesaler ? wholesaleNavGroups : undefined} />
         <Box
           component="main"
           sx={{

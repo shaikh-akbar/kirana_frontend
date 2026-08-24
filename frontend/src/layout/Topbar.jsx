@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useRef, useState } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   AppBar,
   Toolbar,
@@ -10,6 +10,7 @@ import {
   Badge,
   Avatar,
   Chip,
+  Button,
   Menu,
   MenuItem,
   ListItemIcon,
@@ -22,6 +23,8 @@ import {
 import { useTheme } from '@mui/material/styles'
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded'
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded'
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded'
 import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded'
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded'
 import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded'
@@ -35,6 +38,7 @@ import { useThemeMode } from '../theme/themeModeStore'
 import { useAuth } from '../auth/authStore'
 import { useFirm } from '../firm/firmStore'
 import { initialsOf } from '../utils/format'
+import { navItems } from './navItems'
 
 // Stable empty array so the notification lists keep the same identity while
 // nothing is loaded.
@@ -44,9 +48,17 @@ const EMPTY = []
 // carry a value, and no real firm id can collide with a string.
 const ADD_FIRM = '__add_firm__'
 
-export default function Topbar({ onMenuClick }) {
+/**
+ * `navGroups` (see layout/navItems.js's wholesaleNavGroups) switches this
+ * from the normal search-bar layout to WHOLESALER's single consolidated bar:
+ * category dropdowns replace the sidebar, search is dropped, and the firm
+ * picker sits right after the dropdowns instead of after the (hidden)
+ * mobile menu button.
+ */
+export default function Topbar({ onMenuClick, navGroups }) {
   const theme = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
   const isNarrow = useMediaQuery(theme.breakpoints.down('sm'))
   const { mode, toggleMode } = useThemeMode()
   const { user, logout } = useAuth()
@@ -54,6 +66,36 @@ export default function Topbar({ onMenuClick }) {
   const [notifAnchor, setNotifAnchor] = useState(null)
   const [userAnchor, setUserAnchor] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [openGroup, setOpenGroup] = useState(null)
+  // Roving tabindex: only one of the Graphs/Wholesale/Retailer buttons is a
+  // Tab stop at a time, so Tab passes over the whole group in one step and
+  // Left/Right arrows move between them instead — the usual pattern for a
+  // row of menu buttons (kept in sync with whichever page is active).
+  const [focusedGroupIndex, setFocusedGroupIndex] = useState(0)
+  const groupButtonRefs = useRef([])
+
+  // Adjusted during render (React's recommended alternative to an effect
+  // here) rather than in a useEffect, which would cost an extra render pass
+  // for what is really just "reset derived state when the route changes".
+  const [syncedPathname, setSyncedPathname] = useState(location.pathname)
+  if (navGroups && location.pathname !== syncedPathname) {
+    setSyncedPathname(location.pathname)
+    const activeIndex = navGroups.findIndex((g) => g.paths.includes(location.pathname))
+    if (activeIndex !== -1) setFocusedGroupIndex(activeIndex)
+  }
+
+  function itemsForGroup(group) {
+    return group.paths.map((p) => navItems.find((n) => n.path === p)).filter(Boolean)
+  }
+
+  function handleGroupKeyDown(event, index) {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return
+    event.preventDefault()
+    const delta = event.key === 'ArrowRight' ? 1 : -1
+    const nextIndex = (index + delta + navGroups.length) % navGroups.length
+    setFocusedGroupIndex(nextIndex)
+    groupButtonRefs.current[nextIndex]?.focus()
+  }
 
   /*
    * The bell reports on the firm currently being viewed, so it reloads on every
@@ -98,12 +140,92 @@ export default function Topbar({ onMenuClick }) {
   return (
     <AppBar position="sticky" elevation={0}>
       <Toolbar sx={{ gap: 1.5, minHeight: 68 }}>
-        <IconButton
-          onClick={onMenuClick}
-          sx={{ display: { xs: 'inline-flex', md: 'none' } }}
-        >
-          <MenuRoundedIcon />
-        </IconButton>
+        {navGroups ? (
+          <>
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: '10px',
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <StorefrontRoundedIcon fontSize="small" />
+            </Box>
+
+            <Stack direction="row" spacing={0.5} role="menubar" aria-orientation="horizontal" sx={{ display: { xs: 'none', md: 'flex' } }}>
+              {navGroups.map((group, index) => {
+                const GroupIcon = group.icon
+                const active = group.paths.includes(location.pathname)
+                const isOpen = openGroup?.label === group.label
+                return (
+                  <Box key={group.label}>
+                    <Button
+                      ref={(el) => { groupButtonRefs.current[index] = el }}
+                      role="menuitem"
+                      tabIndex={index === focusedGroupIndex ? 0 : -1}
+                      onKeyDown={(e) => handleGroupKeyDown(e, index)}
+                      onClick={(e) => {
+                        setOpenGroup({ label: group.label, anchorEl: e.currentTarget })
+                        setFocusedGroupIndex(index)
+                      }}
+                      startIcon={<GroupIcon fontSize="small" />}
+                      endIcon={<ExpandMoreRoundedIcon fontSize="small" />}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        color: active ? 'primary.main' : 'text.secondary',
+                        bgcolor: active ? 'action.selected' : 'transparent',
+                        borderRadius: '8px',
+                        px: 1.5,
+                        '&:hover': { bgcolor: active ? 'action.selected' : 'action.hover' },
+                      }}
+                    >
+                      {group.label}
+                    </Button>
+                    <Menu
+                      anchorEl={isOpen ? openGroup.anchorEl : null}
+                      open={isOpen}
+                      onClose={() => setOpenGroup(null)}
+                      slotProps={{ paper: { sx: { mt: 0.5, minWidth: 200 } } }}
+                    >
+                      {itemsForGroup(group).map((item) => {
+                        const Icon = item.icon
+                        return (
+                          <MenuItem
+                            key={item.path}
+                            component={NavLink}
+                            to={item.path}
+                            end={item.path === '/'}
+                            onClick={() => setOpenGroup(null)}
+                            selected={location.pathname === item.path}
+                          >
+                            <ListItemIcon>
+                              <Icon fontSize="small" />
+                            </ListItemIcon>
+                            <ListItemText primary={item.label} />
+                          </MenuItem>
+                        )
+                      })}
+                    </Menu>
+                  </Box>
+                )
+              })}
+            </Stack>
+          </>
+        ) : (
+          <IconButton
+            onClick={onMenuClick}
+            sx={{ display: { xs: 'inline-flex', md: 'none' } }}
+          >
+            <MenuRoundedIcon />
+          </IconButton>
+        )}
 
         {/* Rendered only once firms are loaded: a Select whose value is not yet
             among its items logs an out-of-range warning and flashes blank. */}
@@ -136,35 +258,39 @@ export default function Topbar({ onMenuClick }) {
           </Select>
         )}
 
-        <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, my: 1.5 }} />
+        {!navGroups && (
+          <>
+            <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, my: 1.5 }} />
 
-        {(!isNarrow || searchOpen) ? (
-          <Box
-            sx={{
-              flex: 1,
-              maxWidth: 420,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 1.5,
-              py: 0.75,
-              borderRadius: '10px',
-              bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(31,42,36,0.04)'),
-            }}
-          >
-            <SearchRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-            <InputBase
-              placeholder="Search products, buyers, orders…"
-              fullWidth
-              autoFocus={isNarrow}
-              onBlur={() => isNarrow && setSearchOpen(false)}
-              sx={{ fontSize: '0.875rem' }}
-            />
-          </Box>
-        ) : (
-          <IconButton onClick={() => setSearchOpen(true)} sx={{ ml: 'auto' }}>
-            <SearchRoundedIcon />
-          </IconButton>
+            {(!isNarrow || searchOpen) ? (
+              <Box
+                sx={{
+                  flex: 1,
+                  maxWidth: 420,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: '10px',
+                  bgcolor: (t) => (t.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(31,42,36,0.04)'),
+                }}
+              >
+                <SearchRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                <InputBase
+                  placeholder="Search products, buyers, orders…"
+                  fullWidth
+                  autoFocus={isNarrow}
+                  onBlur={() => isNarrow && setSearchOpen(false)}
+                  sx={{ fontSize: '0.875rem' }}
+                />
+              </Box>
+            ) : (
+              <IconButton onClick={() => setSearchOpen(true)} sx={{ ml: 'auto' }}>
+                <SearchRoundedIcon />
+              </IconButton>
+            )}
+          </>
         )}
 
         <Box sx={{ flex: 1 }} />
