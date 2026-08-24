@@ -197,3 +197,9 @@ export const fetchActiveFirm = async () => unwrap(await api.get('/firms/active')
 
 /** Partial update of the active firm (Settings screen). */
 export const updateActiveFirm = async (payload) => unwrap(await api.patch('/firms/active', payload))
+
+/** Everyone with access to the active firm — ADMIN only. */
+export const fetchFirmStaff = async () => unwrap(await api.get('/firms/active/staff')) || []
+
+/** Grants an existing user (found by phone) RETAILER/WHOLESALER access to the active firm. */
+export const addFirmStaff = async (payload) => unwrap(await api.post('/firms/active/staff', payload))

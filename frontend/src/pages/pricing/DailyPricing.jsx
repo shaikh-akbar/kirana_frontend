@@ -26,6 +26,7 @@ import { useResource } from '../../api/useResource'
 import { tabularNums } from '../../theme/theme'
 import { useToast } from '../../components/toastContext'
 import { useFirm } from '../../firm/firmStore'
+import { useAuth } from '../../auth/authStore'
 
 function DeltaTag({ current, previous }) {
   if (previous == null || current === previous) {
@@ -48,6 +49,11 @@ export default function DailyPricing() {
   const [publishing, setPublishing] = useState(false)
   const { showToast } = useToast()
   const { activeFirmId } = useFirm()
+  const { user } = useAuth()
+
+  // RETAILER can view today's rate sheet (POS needs it) but only ADMIN/
+  // WHOLESALER may call PUT /prices/daily-update on the backend.
+  const canEditPricing = user?.roleName === 'ADMIN' || user?.roleName === 'WHOLESALER'
 
   const { data: sheet, error, loading, reload } = useResource(
     activeFirmId,
@@ -127,14 +133,16 @@ export default function DailyPricing() {
             Edit today's wholesale &amp; retail rates, then publish
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<PublishRoundedIcon />}
-          disabled={!rows || hasErrors || pending.length === 0 || publishing}
-          onClick={publishAll}
-        >
-          {publishing ? 'Publishing…' : `Publish today's rates${pending.length > 0 ? ` (${pending.length})` : ''}`}
-        </Button>
+        {canEditPricing && (
+          <Button
+            variant="contained"
+            startIcon={<PublishRoundedIcon />}
+            disabled={!rows || hasErrors || pending.length === 0 || publishing}
+            onClick={publishAll}
+          >
+            {publishing ? 'Publishing…' : `Publish today's rates${pending.length > 0 ? ` (${pending.length})` : ''}`}
+          </Button>
+        )}
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2.5 }}>{error}</Alert>}
@@ -180,6 +188,7 @@ export default function DailyPricing() {
                             value={r.wholesalePrice ?? ''}
                             onChange={(e) => updatePrice(r.productId, 'wholesalePrice', e.target.value)}
                             error={!!errors[r.productId]}
+                            disabled={!canEditPricing}
                             sx={{ width: 100, '& input': { textAlign: 'right', ...tabularNums } }}
                           />
                         </Stack>
@@ -194,6 +203,7 @@ export default function DailyPricing() {
                             onChange={(e) => updatePrice(r.productId, 'retailPrice', e.target.value)}
                             error={!!errors[r.productId]}
                             helperText={errors[r.productId]}
+                            disabled={!canEditPricing}
                             sx={{ width: 100, '& input': { textAlign: 'right', ...tabularNums } }}
                           />
                         </Stack>

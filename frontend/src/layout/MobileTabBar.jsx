@@ -2,15 +2,21 @@ import { useState } from 'react'
 import { Paper, BottomNavigation, BottomNavigationAction, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Box, Typography } from '@mui/material'
 import { useLocation, useNavigate, NavLink } from 'react-router-dom'
 import MoreHorizRoundedIcon from '@mui/icons-material/MoreHorizRounded'
-import { navItems, mobilePrimaryPaths } from './navItems'
+import { navItems, mobilePrimaryPaths, getRoleId } from './navItems'
+import { useAuth } from '../auth/authStore'
 
 export default function MobileTabBar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [moreOpen, setMoreOpen] = useState(false)
 
-  const primaryItems = mobilePrimaryPaths.map((p) => navItems.find((n) => n.path === p))
-  const restItems = navItems.filter((n) => !mobilePrimaryPaths.includes(n.path))
+  const roleId = getRoleId(user?.roleName)
+  const visibleItems = navItems.filter((item) => item.roles.includes(roleId))
+  const primaryItems = mobilePrimaryPaths
+    .map((p) => visibleItems.find((n) => n.path === p))
+    .filter(Boolean)
+  const restItems = visibleItems.filter((n) => !mobilePrimaryPaths.includes(n.path))
   const currentPath = location?.pathname ?? '/'
   const activeValue = primaryItems.some((i) => i.path === currentPath) ? currentPath : 'more'
 

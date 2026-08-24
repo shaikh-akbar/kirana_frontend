@@ -90,7 +90,7 @@ export default function KhataLedger() {
     )
   }, [buyers, query])
 
-  const canManageBuyers = user?.roleName === 'ADMIN' || user?.roleName === 'SALES_REP'
+  const canManageBuyers = user?.roleName === 'ADMIN' || user?.roleName === 'WHOLESALER'
 
   function setBuyerField(name, value) {
     setBuyerForm((prev) => ({ ...prev, [name]: value }))

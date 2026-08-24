@@ -19,24 +19,25 @@ import {
   Skeleton,
   Alert,
   CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
 } from '@mui/material'
 import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded'
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded'
 import SettingsBrightnessRoundedIcon from '@mui/icons-material/SettingsBrightnessRounded'
 import { useThemeMode } from '../../theme/themeModeStore'
 import { useToast } from '../../components/toastContext'
-import { fetchActiveFirm, updateActiveFirm } from '../../api/endpoints'
+import { fetchActiveFirm, updateActiveFirm, fetchFirmStaff, addFirmStaff } from '../../api/endpoints'
 import { apiErrorMessage } from '../../api/client'
 import { useFirm } from '../../firm/firmStore'
 
-const USERS = [
-  { name: 'Akbar Khan', email: 'it@mobilogi.com', role: 'Admin' },
-  { name: 'Sunita Verma', email: 'sunita.verma@kiranaerp.in', role: 'Sales Rep' },
-  { name: 'Rohit Sharma', email: 'rohit.sharma@kiranaerp.in', role: 'Cashier' },
-  { name: 'Meena Joshi', email: 'meena.joshi@kiranaerp.in', role: 'Cashier' },
-]
+const ROLE_COLOR = { ADMIN: 'primary', WHOLESALER: 'info', RETAILER: 'default' }
+const ROLE_LABEL = { ADMIN: 'Admin', WHOLESALER: 'Wholesaler', RETAILER: 'Retailer' }
 
-const ROLE_COLOR = { Admin: 'primary', 'Sales Rep': 'info', Cashier: 'default' }
+const EMPTY_STAFF_FORM = { phone: '', roleName: 'RETAILER' }
 
 // Firm fields this screen edits, mapped to their labels. Kept as data so the
 // form, the payload and the load-time seeding cannot drift apart.
@@ -63,6 +64,13 @@ export default function Settings() {
   const [saveError, setSaveError] = useState(null)
   const [saving, setSaving] = useState(false)
 
+  const [staff, setStaff] = useState(null)
+  const [staffError, setStaffError] = useState(null)
+  const [staffDialogOpen, setStaffDialogOpen] = useState(false)
+  const [staffForm, setStaffForm] = useState(EMPTY_STAFF_FORM)
+  const [staffSubmitError, setStaffSubmitError] = useState(null)
+  const [staffSubmitting, setStaffSubmitting] = useState(false)
+
   useEffect(() => {
     let active = true
     fetchActiveFirm()
@@ -79,6 +87,38 @@ export default function Settings() {
       active = false
     }
   }, [])
+
+  const loadStaff = () =>
+    fetchFirmStaff()
+      .then(setStaff)
+      .catch((err) => setStaffError(apiErrorMessage(err, 'Could not load staff')))
+
+  useEffect(() => {
+    loadStaff()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function openStaffDialog() {
+    setStaffForm(EMPTY_STAFF_FORM)
+    setStaffSubmitError(null)
+    setStaffDialogOpen(true)
+  }
+
+  async function handleAddStaff(event) {
+    event.preventDefault()
+    setStaffSubmitError(null)
+    setStaffSubmitting(true)
+    try {
+      await addFirmStaff(staffForm)
+      await loadStaff()
+      showToast('Staff member added')
+      setStaffDialogOpen(false)
+    } catch (err) {
+      setStaffSubmitError(apiErrorMessage(err, 'Could not add staff member'))
+    } finally {
+      setStaffSubmitting(false)
+    }
+  }
 
   async function handleSaveProfile() {
     setSaveError(null)
@@ -206,35 +246,97 @@ export default function Settings() {
             <Card sx={{ p: 2.5 }}>
               <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                 <Typography variant="subtitle1" fontWeight={700}>Users &amp; roles</Typography>
-                <Button size="small" onClick={() => showToast('Invite link copied', 'success')}>Invite user</Button>
+                <Button size="small" onClick={openStaffDialog}>Add staff</Button>
               </Stack>
-              <List disablePadding sx={{ mt: 1 }}>
-                {USERS.map((u, idx) => (
-                  <Box key={u.email}>
-                    {idx > 0 && <Divider component="li" />}
-                    <ListItem disableGutters sx={{ py: 1.1 }}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ width: 36, height: 36, fontSize: '0.8rem', fontWeight: 700 }}>
-                          {u.name.split(' ').map((n) => n[0]).join('')}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={u.name}
-                        secondary={u.email}
-                        slotProps={{
-                          primary: { fontSize: '0.85rem', fontWeight: 600 },
-                          secondary: { fontSize: '0.72rem' },
-                        }}
-                      />
-                      <Chip label={u.role} size="small" color={ROLE_COLOR[u.role]} variant="outlined" />
-                    </ListItem>
-                  </Box>
-                ))}
-              </List>
+
+              {staffError && <Alert severity="error" sx={{ mt: 1.5 }}>{staffError}</Alert>}
+
+              {!staff && !staffError && <Skeleton variant="rounded" height={140} sx={{ mt: 1.5 }} />}
+
+              {staff && staff.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+                  No staff yet — add a retailer or wholesaler by their phone number.
+                </Typography>
+              )}
+
+              {staff && staff.length > 0 && (
+                <List disablePadding sx={{ mt: 1 }}>
+                  {staff.map((u, idx) => (
+                    <Box key={u.id}>
+                      {idx > 0 && <Divider component="li" />}
+                      <ListItem disableGutters sx={{ py: 1.1 }}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ width: 36, height: 36, fontSize: '0.8rem', fontWeight: 700 }}>
+                            {u.name.split(' ').map((n) => n[0]).join('')}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={u.name}
+                          secondary={u.phone}
+                          slotProps={{
+                            primary: { fontSize: '0.85rem', fontWeight: 600 },
+                            secondary: { fontSize: '0.72rem' },
+                          }}
+                        />
+                        <Chip
+                          label={ROLE_LABEL[u.roleName] || u.roleName}
+                          size="small"
+                          color={ROLE_COLOR[u.roleName] || 'default'}
+                          variant="outlined"
+                        />
+                      </ListItem>
+                    </Box>
+                  ))}
+                </List>
+              )}
             </Card>
           </Stack>
         </Grid>
       </Grid>
+
+      <Dialog open={staffDialogOpen} onClose={() => !staffSubmitting && setStaffDialogOpen(false)} fullWidth maxWidth="xs">
+        <Stack component="form" onSubmit={handleAddStaff}>
+          <DialogTitle>Add staff</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              They must already have an account (registered with this phone number) — this only
+              grants them access to this firm.
+            </Typography>
+            {staffSubmitError && <Alert severity="error" sx={{ mb: 2 }}>{staffSubmitError}</Alert>}
+            <Stack spacing={2}>
+              <TextField
+                label="Phone number"
+                value={staffForm.phone}
+                onChange={(e) => setStaffForm((f) => ({ ...f, phone: e.target.value }))}
+                fullWidth
+                required
+                autoFocus
+              />
+              <TextField
+                select
+                label="Role"
+                value={staffForm.roleName}
+                onChange={(e) => setStaffForm((f) => ({ ...f, roleName: e.target.value }))}
+                fullWidth
+              >
+                <MenuItem value="RETAILER">Retailer</MenuItem>
+                <MenuItem value="WHOLESALER">Wholesaler</MenuItem>
+              </TextField>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, pt: 0 }}>
+            <Button onClick={() => setStaffDialogOpen(false)} disabled={staffSubmitting}>Cancel</Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={staffSubmitting || !staffForm.phone.trim()}
+              startIcon={staffSubmitting ? <CircularProgress size={16} color="inherit" /> : null}
+            >
+              {staffSubmitting ? 'Adding…' : 'Add staff'}
+            </Button>
+          </DialogActions>
+        </Stack>
+      </Dialog>
     </Box>
   )
 }
