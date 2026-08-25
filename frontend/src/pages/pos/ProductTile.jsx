@@ -2,7 +2,7 @@ import { ButtonBase, Box, Typography } from '@mui/material'
 import { formatCurrency, formatQuantity } from '../../utils/format'
 import { productEmoji } from '../../utils/productEmoji'
 
-export default function ProductTile({ product, onAdd }) {
+export default function ProductTile({ product, onAdd, highlighted = false }) {
   // A product with no rate published cannot be billed; the tile says so rather
   // than letting the tap fail at the server.
   const unpriced = product.retailPrice == null
@@ -19,11 +19,13 @@ export default function ProductTile({ product, onAdd }) {
         p: 1.75,
         borderRadius: '14px',
         border: '1px solid',
-        borderColor: 'divider',
+        borderColor: highlighted ? 'primary.main' : 'divider',
         bgcolor: 'background.paper',
         textAlign: 'left',
         gap: 0.75,
         opacity: unpriced ? 0.55 : 1,
+        boxShadow: highlighted ? 3 : 0,
+        transform: highlighted ? 'translateY(-2px)' : 'translateY(0)',
         transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
         '&:hover': { borderColor: 'primary.main', boxShadow: 3, transform: 'translateY(-2px)' },
         '&:active': { transform: 'translateY(0)' },

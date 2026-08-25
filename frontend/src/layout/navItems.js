@@ -61,7 +61,7 @@ export const navItems = [
 // Priority items shown in the bottom tab bar below 768px; the rest live behind "More".
 export const mobilePrimaryPaths = ['/', '/pos', '/wholesale', '/khata']
 
-// WHOLESALER's top navbar (see WholesaleNav.jsx) groups the same pages from
+// WHOLESALER's top navbar (built into Topbar.jsx) groups the same pages from
 // `navItems` into categories instead of listing them flat like the sidebar.
 // Every path here must already be reachable by WHOLESALER in App.jsx/navItems
 // — this only reorganizes the menu, it grants no new access.

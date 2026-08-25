@@ -53,9 +53,11 @@ const ADD_FIRM = '__add_firm__'
  * from the normal search-bar layout to WHOLESALER's single consolidated bar:
  * category dropdowns replace the sidebar, search is dropped, and the firm
  * picker sits right after the dropdowns instead of after the (hidden)
- * mobile menu button.
+ * mobile menu button. `flatItems` is the same idea for RETAILER, whose few
+ * pages don't need categories — just plain links in a row so Tab lands on
+ * each one directly instead of routing through a sidebar.
  */
-export default function Topbar({ onMenuClick, navGroups }) {
+export default function Topbar({ onMenuClick, navGroups, flatItems }) {
   const theme = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -140,7 +142,7 @@ export default function Topbar({ onMenuClick, navGroups }) {
   return (
     <AppBar position="sticky" elevation={0}>
       <Toolbar sx={{ gap: 1.5, minHeight: 68 }}>
-        {navGroups ? (
+        {navGroups || flatItems ? (
           <>
             <Box
               sx={{
@@ -158,6 +160,36 @@ export default function Topbar({ onMenuClick, navGroups }) {
               <StorefrontRoundedIcon fontSize="small" />
             </Box>
 
+            {flatItems && (
+              <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', md: 'flex' } }}>
+                {flatItems.map((item) => {
+                  const Icon = item.icon
+                  const active = location.pathname === item.path
+                  return (
+                    <Button
+                      key={item.path}
+                      component={NavLink}
+                      to={item.path}
+                      end={item.path === '/'}
+                      startIcon={<Icon fontSize="small" />}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 700,
+                        color: active ? 'primary.main' : 'text.secondary',
+                        bgcolor: active ? 'action.selected' : 'transparent',
+                        borderRadius: '8px',
+                        px: 1.5,
+                        '&:hover': { bgcolor: active ? 'action.selected' : 'action.hover' },
+                      }}
+                    >
+                      {item.label}
+                    </Button>
+                  )
+                })}
+              </Stack>
+            )}
+
+            {navGroups && (
             <Stack direction="row" spacing={0.5} role="menubar" aria-orientation="horizontal" sx={{ display: { xs: 'none', md: 'flex' } }}>
               {navGroups.map((group, index) => {
                 const GroupIcon = group.icon
@@ -217,6 +249,7 @@ export default function Topbar({ onMenuClick, navGroups }) {
                 )
               })}
             </Stack>
+            )}
           </>
         ) : (
           <IconButton
@@ -258,7 +291,7 @@ export default function Topbar({ onMenuClick, navGroups }) {
           </Select>
         )}
 
-        {!navGroups && (
+        {!navGroups && !flatItems && (
           <>
             <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, my: 1.5 }} />
 
