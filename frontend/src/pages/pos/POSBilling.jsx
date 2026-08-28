@@ -14,10 +14,15 @@ import {
   Divider,
   Button,
   Skeleton,
+  IconButton,
 } from '@mui/material'
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
 import QrCodeScannerRoundedIcon from '@mui/icons-material/QrCodeScannerRounded'
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded'
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded'
+import PaymentsRoundedIcon from '@mui/icons-material/PaymentsRounded'
+import QrCodeRoundedIcon from '@mui/icons-material/QrCodeRounded'
+import CreditCardRoundedIcon from '@mui/icons-material/CreditCardRounded'
 import ProductTile from './ProductTile'
 import CartPanel from './CartPanel'
 import EmptyState from '../../components/EmptyState'
@@ -33,6 +38,11 @@ import { useFirm } from '../../firm/firmStore'
 
 /** Payment buttons on the cart map to the API's payment_mode enum. */
 const PAYMENT_MODE = { Cash: 'CASH', UPI: 'UPI', Card: 'CARD' }
+const PAYMENT_ICON = {
+  Cash: PaymentsRoundedIcon,
+  UPI: QrCodeRoundedIcon,
+  Card: CreditCardRoundedIcon,
+}
 
 function makeDraftBill(number) {
   return { id: `draft-${number}`, name: `Bill ${number}`, cart: [] }
@@ -44,6 +54,7 @@ export default function POSBilling() {
   const [bills, setBills] = useState([makeDraftBill(1)])
   const [activeBillId, setActiveBillId] = useState('draft-1')
   const [nextBillNumber, setNextBillNumber] = useState(2)
+  const [pendingPayment, setPendingPayment] = useState(null)
   const [receipt, setReceipt] = useState(null)
   const [posting, setPosting] = useState(false)
   const [highlightedProductIndex, setHighlightedProductIndex] = useState(0)
@@ -132,6 +143,16 @@ export default function POSBilling() {
     )
   }
 
+  function availableStock(product) {
+    return Number(product?.stock || 0)
+  }
+
+  function canIncreaseQty(productId, nextQty) {
+    const product = (products || []).find((item) => item.id === productId)
+    if (!product) return false
+    return nextQty <= availableStock(product)
+  }
+
   function addToCart(product) {
     // Without a rate there is nothing to bill against: the server would reject
     // the line, so the tile is stopped here with an explanation instead.
@@ -139,10 +160,19 @@ export default function POSBilling() {
       showToast(`No rate set for ${product.name} - publish today's rate first`, 'warning')
       return
     }
+    if (availableStock(product) <= 0) {
+      showToast(`${product.name} is out of stock`, 'warning')
+      return
+    }
     updateActiveBillCart((prev) => {
       const existing = prev.find((c) => c.productId === product.id)
+      const nextQty = (existing?.qty || 0) + 1
+      if (nextQty > availableStock(product)) {
+        showToast(`Only ${availableStock(product)} ${product.unit || 'unit'} available for ${product.name}`, 'warning')
+        return prev
+      }
       const nextCart = existing
-        ? prev.map((c) => (c.productId === product.id ? { ...c, qty: c.qty + 1 } : c))
+        ? prev.map((c) => (c.productId === product.id ? { ...c, qty: nextQty } : c))
         : [...prev, { productId: product.id, qty: 1 }]
       const nextIndex = nextCart.findIndex((item) => item.productId === product.id)
       setSelectedCartIndex(nextIndex >= 0 ? nextIndex : 0)
@@ -160,7 +190,17 @@ export default function POSBilling() {
   }
 
   function incQty(id) {
-    updateActiveBillCart((prev) => prev.map((c) => (c.productId === id ? { ...c, qty: c.qty + 1 } : c)))
+    const product = (products || []).find((item) => item.id === id)
+    if (!product) return
+    updateActiveBillCart((prev) => {
+      const line = prev.find((c) => c.productId === id)
+      const nextQty = (line?.qty || 0) + 1
+      if (!canIncreaseQty(id, nextQty)) {
+        showToast(`Only ${availableStock(product)} ${product.unit || 'unit'} available for ${product.name}`, 'warning')
+        return prev
+      }
+      return prev.map((c) => (c.productId === id ? { ...c, qty: nextQty } : c))
+    })
   }
 
   function decQty(id) {
@@ -241,10 +281,31 @@ export default function POSBilling() {
     }
   }
 
+  function openPaymentConfirmation(mode, total) {
+    if (posting || cartItems.length === 0 || receipt) return
+    setPendingPayment({ mode, total })
+  }
+
+  function closePaymentConfirmation() {
+    if (posting) return
+    setPendingPayment(null)
+    searchRef.current?.focus()
+  }
+
+  async function confirmCheckout() {
+    if (!pendingPayment) return
+    await handleCheckout(pendingPayment.mode, pendingPayment.total)
+    setPendingPayment(null)
+  }
+
   function closeReceipt() {
     setReceipt(null)
-    showToast(`Bill ${receipt?.billNumber} saved`, 'success')
     searchRef.current?.focus()
+  }
+
+  function handleReceiptClose(event, reason) {
+    if (reason === 'backdropClick') return
+    closeReceipt()
   }
 
   function handleSearchKeyDown(event) {
@@ -286,17 +347,17 @@ export default function POSBilling() {
 
       if (event.key === 'F1') {
         event.preventDefault()
-        handleCheckout('Cash', cartTotal)
+        openPaymentConfirmation('Cash', cartTotal)
         return
       }
       if (event.key === 'F2') {
         event.preventDefault()
-        handleCheckout('UPI', cartTotal)
+        openPaymentConfirmation('UPI', cartTotal)
         return
       }
       if (event.key === 'F3') {
         event.preventDefault()
-        handleCheckout('Card', cartTotal)
+        openPaymentConfirmation('Card', cartTotal)
         return
       }
 
@@ -452,16 +513,91 @@ export default function POSBilling() {
               onInc={incQty}
               onDec={decQty}
               onRemove={removeItem}
-              onCheckout={handleCheckout}
+              onCheckout={openPaymentConfirmation}
               busy={posting}
             />
           </Card>
         </Grid>
       </Grid>
 
-      <Dialog open={!!receipt} onClose={closeReceipt} maxWidth="xs" fullWidth>
+      <Dialog open={!!pendingPayment} onClose={posting ? undefined : closePaymentConfirmation} maxWidth="xs" fullWidth>
+        {pendingPayment && (
+          <DialogContent sx={{ p: 3.5, pt: 5, position: 'relative' }}>
+            <IconButton
+              aria-label="Close payment confirmation"
+              onClick={closePaymentConfirmation}
+              disabled={posting}
+              sx={{ position: 'absolute', top: 12, right: 12 }}
+            >
+              <CloseRoundedIcon />
+            </IconButton>
+            <Stack spacing={2}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    bgcolor: 'primary.main',
+                    color: 'primary.contrastText',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {(() => {
+                    const PaymentIcon = PAYMENT_ICON[pendingPayment.mode] || PaymentsRoundedIcon
+                    return <PaymentIcon fontSize="small" />
+                  })()}
+                </Box>
+                <Box>
+                  <Typography variant="h6" fontWeight={800}>Confirm payment</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {activeBill.name} - {pendingPayment.mode}
+                  </Typography>
+                </Box>
+              </Stack>
+              <Divider />
+              <Stack spacing={1}>
+                {cartItems.map((item) => (
+                  <Stack key={item.product.id} direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
+                    <Typography variant="body2">{item.product.name} x {item.qty}</Typography>
+                    <Typography variant="body2" sx={tabularNums}>
+                      {formatCurrency(item.product.retailPrice * item.qty)}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+              <Divider />
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle1" fontWeight={800}>Total to collect</Typography>
+                <Typography variant="h6" fontWeight={800} sx={tabularNums} color="primary.main">
+                  {formatCurrency(pendingPayment.total)}
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={1}>
+                <Button fullWidth variant="outlined" onClick={closePaymentConfirmation} disabled={posting}>
+                  Cancel
+                </Button>
+                <Button fullWidth variant="contained" onClick={confirmCheckout} disabled={posting}>
+                  {posting ? 'Saving...' : 'Confirm & save'}
+                </Button>
+              </Stack>
+            </Stack>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      <Dialog open={!!receipt} onClose={handleReceiptClose} maxWidth="xs" fullWidth>
         {receipt && (
-          <DialogContent sx={{ p: 3.5, textAlign: 'center' }}>
+          <DialogContent sx={{ p: 3.5, pt: 5, textAlign: 'center', position: 'relative' }}>
+            <IconButton
+              aria-label="Close receipt"
+              onClick={closeReceipt}
+              sx={{ position: 'absolute', top: 12, right: 12 }}
+            >
+              <CloseRoundedIcon />
+            </IconButton>
             <CheckCircleRoundedIcon sx={{ fontSize: 48, color: 'success.main', mb: 1 }} />
             <Typography variant="h6" fontWeight={800}>Payment received</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
