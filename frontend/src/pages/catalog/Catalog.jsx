@@ -159,7 +159,7 @@ export default function Catalog() {
   )
 
   const products = data?.products || []
-  const categories = data?.categories?.rows
+  const categories = data?.categories?.rows || []
   const canManageCatalog = user?.roleName === 'ADMIN' || user?.roleName === 'WHOLESALER'
 
   const categoryOptions = useMemo(
